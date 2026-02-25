@@ -36,3 +36,6 @@ err.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code memory (AI assistant context, not project files)
+.claude/
