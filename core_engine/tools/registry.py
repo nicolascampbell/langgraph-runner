@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 from langchain_core.tools import BaseTool
-from core_engine.tools.google_tools import get_google_drive_tools, get_gmail_tools
+from core_engine.tools.google_drive import get_google_drive_tools
+from core_engine.tools.gmail import get_gmail_tools
 
 def load_tools(resources: List[Dict[str, Any]]) -> List[BaseTool]:
     """

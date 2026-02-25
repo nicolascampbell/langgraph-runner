@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from core_engine.nodes import get_llm
+from core_engine.llm import get_llm
 from langchain_core.messages import HumanMessage, SystemMessage
 
 load_dotenv()
