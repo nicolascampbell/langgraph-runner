@@ -1,0 +1,43 @@
+{
+    "run_id": "r-drive-test",
+    "mission_id": "m-drive-test",
+    "s3_context_links": [],
+    "agents": [
+        {
+            "id": "agent-1",
+            "name": "Drive Researcher",
+            "role": "Data Gatherer",
+            "system_prompt": "You are a research analyst. Your job is to search the user's Google Drive and summarize what you find.",
+            "model_provider": "openai",
+            "model_name": "gpt-4o-mini",
+            "temperature": 0.2
+        }
+    ],
+    "resources": [
+        {
+            "id": "res-1",
+            "type": "google_drive",
+            "name": "User's Google Drive",
+            "description": "Access to search and read documents in the user's Google Drive."
+        }
+    ],
+    "graph": {
+        "nodes": [
+            {
+                "id": "task-A",
+                "agent_id": "agent-1",
+                "instructions": "Use your Google Drive tool to find any recent documents or files in the drive. Just list the names of the first 3 files you see."
+            }
+        ],
+        "edges": [
+            {
+                "source": "START",
+                "target": "task-A"
+            },
+            {
+                "source": "task-A",
+                "target": "END"
+            }
+        ]
+    }
+}

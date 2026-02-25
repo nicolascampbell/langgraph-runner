@@ -1,0 +1,38 @@
+{
+    "run_id": "r-s3-test",
+    "mission_id": "m-s3-test",
+    "s3_context_links": [
+        "s3://workmate-axceta/"
+    ],
+    "agents": [
+        {
+            "id": "agent-s3-reader",
+            "name": "Data Analyst",
+            "role": "Data Analyst",
+            "system_prompt": "You are a data analyst. You synthesize context provided to you and answer questions based solely on that context.",
+            "model_provider": "openai",
+            "model_name": "gpt-4o-mini",
+            "temperature": 0.2
+        }
+    ],
+    "resources": [],
+    "graph": {
+        "nodes": [
+            {
+                "id": "task-s3-read",
+                "agent_id": "agent-s3-reader",
+                "instructions": "List all the files that were provided to you in your context, and provide a 1-sentence summary of what's inside the files. The context has markings like --- File: <name> ---."
+            }
+        ],
+        "edges": [
+            {
+                "source": "START",
+                "target": "task-s3-read"
+            },
+            {
+                "source": "task-s3-read",
+                "target": "END"
+            }
+        ]
+    }
+}

@@ -1,0 +1,43 @@
+{
+    "run_id": "r-gmail-test",
+    "mission_id": "m-gmail-test",
+    "s3_context_links": [],
+    "agents": [
+        {
+            "id": "agent-gmail",
+            "name": "Email Assistant",
+            "role": "Communications Agent",
+            "system_prompt": "You are a helpful assistant. Use your Gmail tools to search and retrieve emails.",
+            "model_provider": "openai",
+            "model_name": "gpt-4o-mini",
+            "temperature": 0.2
+        }
+    ],
+    "resources": [
+        {
+            "id": "res-2",
+            "type": "gmail",
+            "name": "User's Gmail",
+            "description": "Access to read and search the user's Gmail inbox."
+        }
+    ],
+    "graph": {
+        "nodes": [
+            {
+                "id": "task-gmail",
+                "agent_id": "agent-gmail",
+                "instructions": "Use your Gmail tool to search for the subject of the single most recent email in my inbox. Just tell me who it's from and the subject line."
+            }
+        ],
+        "edges": [
+            {
+                "source": "START",
+                "target": "task-gmail"
+            },
+            {
+                "source": "task-gmail",
+                "target": "END"
+            }
+        ]
+    }
+}

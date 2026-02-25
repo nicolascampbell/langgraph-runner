@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+langchain
+langgraph
+boto3
+pydantic
+langchain-openai
+python-dotenv
+langchain-anthropic
+langchain-google-genai
+langchain-google-community[drive,gmail]
