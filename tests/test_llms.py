@@ -1,4 +1,7 @@
 import os
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 from dotenv import load_dotenv
 from core_engine.llm import get_llm
 from langchain_core.messages import HumanMessage, SystemMessage

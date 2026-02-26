@@ -37,5 +37,6 @@ err.txt
 .DS_Store
 Thumbs.db
 
-# Claude Code memory (AI assistant context, not project files)
+# Claude Code (AI assistant context and instructions, not project files)
 .claude/
+CLAUDE.md
