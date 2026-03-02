@@ -32,16 +32,19 @@
             {
                 "id": "task-list-drive",
                 "agent_id": "agent-google",
+                "resource_ids": ["res-drive"],
                 "instructions": "Use your Google Drive tool to list files in the drive. Return the names of the first 3 files you see."
             },
             {
                 "id": "task-list-gmail",
                 "agent_id": "agent-google",
+                "resource_ids": ["res-gmail"],
                 "instructions": "Use your Gmail search tool to search 'in:inbox' for 3 messages. Return the sender and subject of each."
             },
             {
                 "id": "task-write-drive",
                 "agent_id": "agent-google",
+                "resource_ids": ["res-drive"],
                 "instructions": "Use your Google Drive tool to create a new document named 'workmate-runner-test' with this content: 'This is a test document created by workmate-runner to verify Google Drive write access.' Return the file ID."
             }
         ],

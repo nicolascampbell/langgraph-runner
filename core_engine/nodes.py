@@ -16,6 +16,7 @@ def create_node_function(node_config: Dict[str, Any]):
     node_id = node_config.get("id")
     agent_id = node_config.get("agent_id")
     task_instructions = node_config.get("instructions", "No instructions provided.")
+    resource_ids = node_config.get("resource_ids")  # None means "all resources"
     
     def process_node(state: AgentState):
         """
@@ -47,9 +48,12 @@ def create_node_function(node_config: Dict[str, Any]):
              HumanMessage(content=f"Context Document:\n{state['context']}\n\nTask: {task_instructions}")
         ]
         
-        # Load any dynamic tools from the global state/DB config
+        # Load tools for this node only — filtered by resource_ids if specified
         resources_dict = state.get("resources", {})
-        resources_list = list(resources_dict.values())
+        if resource_ids is not None:
+            resources_list = [resources_dict[rid] for rid in resource_ids if rid in resources_dict]
+        else:
+            resources_list = list(resources_dict.values())
         tools = load_tools(resources_list)
         
         # Determine execution path 
