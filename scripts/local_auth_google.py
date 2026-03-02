@@ -27,7 +27,7 @@ def main():
     
     # This will open the default web browser and ask the user to authenticate
     # We force port 8080 so it matches the explicit whitelist we will set in GCP
-    creds = flow.run_local_server(port=8080)
+    creds = flow.run_local_server(port=8080, prompt="consent")
 
     # Save the credentials for the next run (including the refresh token)
     with open("token.json", "w") as token:
