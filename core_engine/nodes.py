@@ -63,7 +63,7 @@ def create_node_function(node_config: Dict[str, Any]):
              agent_executor = create_react_agent(llm, tools=tools)
              # The executor takes our same messages array and runs autonomously 
              # until the tools finish and the LLM produces a final answer.
-             response = agent_executor.invoke({"messages": messages})
+             response = agent_executor.invoke({"messages": messages}, {"recursion_limit": 10})
              # create_react_agent returns a dict with the updated "messages" array. 
              # The final message is the LLM's conclusive response.
              result_content = response["messages"][-1].content
