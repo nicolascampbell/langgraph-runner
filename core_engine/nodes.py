@@ -1,6 +1,6 @@
 from typing import Dict, Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langgraph.prebuilt import create_react_agent
 
 from core_engine.state import AgentState
@@ -42,11 +42,12 @@ def create_node_function(node_config: Dict[str, Any]):
              temperature=temperature
         )
         
-        # Construct the messages array
-        messages = [
-             SystemMessage(content=system_prompt),
-             HumanMessage(content=f"Context Document:\n{state['context']}\n\nTask: {task_instructions}")
-        ]
+        # Construct the messages array, including prior node outputs as conversation history
+        messages = (
+            [SystemMessage(content=system_prompt)]
+            + state.get("messages", [])
+            + [HumanMessage(content=f"Context Document:\n{state['context']}\n\nTask: {task_instructions}")]
+        )
         
         # Load tools for this node only — filtered by resource_ids if specified
         resources_dict = state.get("resources", {})
@@ -83,7 +84,7 @@ def create_node_function(node_config: Dict[str, Any]):
         new_outputs[node_id] = formatted_response
         
         return {
-            "messages": [formatted_response],
+            "messages": [AIMessage(content=result_content, name=node_id)],
             "node_outputs": new_outputs
         }
         

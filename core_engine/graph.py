@@ -84,5 +84,5 @@ def execute_graph(
     print("Executing compiled LangGraph...")
     result = app.invoke(initial_state, {"recursion_limit": 25})
     
-    # We can join all messages or return the final outputs
-    return "\n".join(result["messages"])
+    # Join formatted per-node outputs for the final response
+    return "\n".join(result["node_outputs"].values())
