@@ -1,0 +1,55 @@
+{
+    "run_id": "r-google-combined-test",
+    "mission_id": "m-google-combined-test",
+    "s3_context_links": [],
+    "agents": [
+        {
+            "id": "agent-google",
+            "name": "Google Assistant",
+            "role": "Productivity Agent",
+            "system_prompt": "You are a helpful assistant with access to the user's Google Drive and Gmail. Use your tools precisely as instructed.",
+            "model_provider": "openai",
+            "model_name": "gpt-4o-mini",
+            "temperature": 0.2
+        }
+    ],
+    "resources": [
+        {
+            "id": "res-drive",
+            "type": "google_drive",
+            "name": "User's Google Drive",
+            "description": "Access to list and create documents in the user's Google Drive."
+        },
+        {
+            "id": "res-gmail",
+            "type": "gmail",
+            "name": "User's Gmail",
+            "description": "Access to read and search the user's Gmail inbox."
+        }
+    ],
+    "graph": {
+        "nodes": [
+            {
+                "id": "task-list-drive",
+                "agent_id": "agent-google",
+                "instructions": "Use your Google Drive tool to list files in the drive. Return the names of the first 3 files you see."
+            },
+            {
+                "id": "task-list-gmail",
+                "agent_id": "agent-google",
+                "instructions": "Use your Gmail search tool to search 'in:inbox' for 3 messages. Return the sender and subject of each."
+            },
+            {
+                "id": "task-write-drive",
+                "agent_id": "agent-google",
+                "instructions": "Use your Google Drive tool to create a new document named 'workmate-runner-test' with this content: 'This is a test document created by workmate-runner to verify Google Drive write access.' Return the file ID."
+            }
+        ],
+        "edges": [
+            { "source": "START", "target": "task-list-drive" },
+            { "source": "task-list-drive", "target": "task-list-gmail" },
+            { "source": "task-list-gmail", "target": "task-write-drive" },
+            { "source": "task-write-drive", "target": "END" }
+        ]
+    }
+}
