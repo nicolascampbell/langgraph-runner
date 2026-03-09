@@ -26,8 +26,5 @@ class GraphPayload(BaseModel):
 class RunRequest(BaseModel):
     run_id: str
     mission_id: str
-    graph: GraphPayload
-    agents: List[AgentConfig]
-    resources: List[ResourceConfig]
     # Briefing / Context docs (from mission_artifacts)
-    s3_context_links: List[str] = []
+    s3_context_links: Optional[List[str]] = []

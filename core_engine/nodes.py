@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
@@ -17,38 +18,40 @@ def create_node_function(node_config: Dict[str, Any]):
     agent_id = node_config.get("agent_id")
     task_instructions = node_config.get("instructions", "No instructions provided.")
     resource_ids = node_config.get("resource_ids")  # None means "all resources"
-    
+
     def process_node(state: AgentState):
         """
-        Dynamically processes a node based on its configuration, 
+        Dynamically processes a node based on its configuration,
         using the specific agent and the shared context.
         """
+        run_id = state.get("run_id", "")
+
         # Look up the agent config that is supposed to run this node
         agent_config = state["agents"].get(agent_id, {})
         agent_name = agent_config.get("name", "Unknown Agent")
-        
+
         # Determine the model and provider
         model_provider = agent_config.get("model_provider", "openai")
         model_name = agent_config.get("model_name", "gpt-4o-mini")
         temperature = agent_config.get("temperature", 0.7)
         system_prompt = agent_config.get("system_prompt", "You are a helpful assistant.")
-        
+
         print(f"\n[{agent_name}] executing Node {node_id} using {model_provider} ({model_name})...")
-        
+
         # Dynamically instantiate the LLM
         llm = get_llm(
-             provider=model_provider, 
-             model_name=model_name, 
-             temperature=temperature
+            provider=model_provider,
+            model_name=model_name,
+            temperature=temperature,
         )
-        
+
         # Construct the messages array, including prior node outputs as conversation history
         messages = (
             [SystemMessage(content=system_prompt)]
             + state.get("messages", [])
             + [HumanMessage(content=f"Context Document:\n{state['context']}\n\nTask: {task_instructions}")]
         )
-        
+
         # Load tools for this node only — filtered by resource_ids if specified
         resources_dict = state.get("resources", {})
         if resource_ids is not None:
@@ -56,36 +59,71 @@ def create_node_function(node_config: Dict[str, Any]):
         else:
             resources_list = list(resources_dict.values())
         tools = load_tools(resources_list)
-        
-        # Determine execution path 
-        if tools:
-             print(f" -> Equipping {len(tools)} tool(s). Starting ReAct Agent loop...")
-             # create_react_agent builds a compiled LangGraph specifically for Tool usage
-             agent_executor = create_react_agent(llm, tools=tools)
-             # The executor takes our same messages array and runs autonomously 
-             # until the tools finish and the LLM produces a final answer.
-             response = agent_executor.invoke({"messages": messages}, {"recursion_limit": 10})
-             # create_react_agent returns a dict with the updated "messages" array. 
-             # The final message is the LLM's conclusive response.
-             result_content = response["messages"][-1].content
-        else:
-             print(" -> No tools equipped. Using direct LLM invocation...")
-             # Direct invocation if no tools are available.
-             response = llm.invoke(messages)
-             result_content = response.content
-        
+
+        started_at = datetime.now(timezone.utc)
+        token_usage = None
+
+        try:
+            # Determine execution path
+            if tools:
+                print(f" -> Equipping {len(tools)} tool(s). Starting ReAct Agent loop...")
+                agent_executor = create_react_agent(llm, tools=tools)
+                response = agent_executor.invoke({"messages": messages}, {"recursion_limit": 10})
+                result_content = response["messages"][-1].content
+                # Best-effort token usage from last AI message
+                last_msg = response["messages"][-1]
+                if hasattr(last_msg, "usage_metadata") and last_msg.usage_metadata:
+                    token_usage = last_msg.usage_metadata
+            else:
+                print(" -> No tools equipped. Using direct LLM invocation...")
+                response = llm.invoke(messages)
+                result_content = response.content
+                if hasattr(response, "usage_metadata") and response.usage_metadata:
+                    token_usage = response.usage_metadata
+
+        except Exception as e:
+            finished_at = datetime.now(timezone.utc)
+            _safe_write_log(run_id, node_id, "error", str(e))
+            raise
+
+        finished_at = datetime.now(timezone.utc)
+
         formatted_response = (
             f"--- Node: {node_id} | Agent: {agent_name} | Engine: {model_provider} ---\n"
             f"{result_content}\n"
         )
-        
-        # We can append the result to messages and to a specific node output map
+
+        # Persist node output to DB (best-effort — don't fail the run on DB errors)
+        _safe_write_node_execution(
+            run_id, node_id, formatted_response, started_at, finished_at, token_usage
+        )
+
         new_outputs = state.get("node_outputs", {}).copy()
         new_outputs[node_id] = formatted_response
-        
+
         return {
             "messages": [AIMessage(content=result_content, name=node_id)],
-            "node_outputs": new_outputs
+            "node_outputs": new_outputs,
         }
-        
+
     return process_node
+
+
+def _safe_write_node_execution(run_id, node_id, output, started_at, finished_at, token_usage):
+    if not run_id:
+        return
+    try:
+        from services.db_service import write_node_execution
+        write_node_execution(run_id, node_id, output, started_at, finished_at, token_usage)
+    except Exception as ex:
+        print(f" [DB] Failed to write node_execution for {node_id}: {ex}")
+
+
+def _safe_write_log(run_id, node_id, level, message):
+    if not run_id:
+        return
+    try:
+        from services.db_service import write_run_log
+        write_run_log(run_id, node_id, level, message)
+    except Exception as ex:
+        print(f" [DB] Failed to write run_log for {node_id}: {ex}")

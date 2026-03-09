@@ -4,10 +4,11 @@ from core_engine.state import AgentState
 from core_engine.nodes import create_node_function
 
 def execute_graph(
-    graph_payload: Dict[str, Any], 
-    agents: List[Dict[str, Any]], 
-    resources: List[Dict[str, Any]], 
-    context_data: str
+    graph_payload: Dict[str, Any],
+    agents: List[Dict[str, Any]],
+    resources: List[Dict[str, Any]],
+    context_data: str,
+    run_id: str = "",
 ) -> str:
     """
     Constructs and executes a LangGraph based on the database's Graph Payload (nodes and edges).
@@ -75,10 +76,11 @@ def execute_graph(
     initial_state = {
         "messages": [],
         "context": context_data,
+        "run_id": run_id,
         "node_outputs": {},
         "graph_payload": graph_payload,
         "agents": agents_map,
-        "resources": resources_map
+        "resources": resources_map,
     }
     
     print("Executing compiled LangGraph...")

@@ -7,6 +7,7 @@ class AgentState(TypedDict):
     """
     messages: Annotated[list, add_messages]
     context: str
+    run_id: str
 
     # We can store the current outputs of previous nodes to be passed to future nodes
     node_outputs: Dict[str, Any]

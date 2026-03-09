@@ -9,3 +9,5 @@ python-dotenv
 langchain-anthropic
 langchain-google-genai
 langchain-google-community[drive,gmail]
+psycopg2-binary
+ddgs
