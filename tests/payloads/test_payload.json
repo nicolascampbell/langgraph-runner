@@ -1,56 +1,5 @@
 {
     "run_id": "r-12345",
     "mission_id": "m-6789",
-    "s3_context_links": [
-        "s3://my-test-bucket/briefing.txt"
-    ],
-    "agents": [
-        {
-            "id": "agent-1",
-            "name": "Research Analyst",
-            "role": "Data Gatherer",
-            "system_prompt": "You are a research analyst. Gather facts.",
-            "model_provider": "anthropic",
-            "model_name": "claude-3-haiku-20240307",
-            "temperature": 0.2
-        },
-        {
-            "id": "agent-2",
-            "name": "Writer",
-            "role": "Content Creator",
-            "system_prompt": "You write final reports.",
-            "model_provider": "google",
-            "model_name": "gemini-1.5-flash",
-            "temperature": 0.7
-        }
-    ],
-    "resources": [],
-    "graph": {
-        "nodes": [
-            {
-                "id": "task-A",
-                "agent_id": "agent-1",
-                "instructions": "Extract key themes from the briefing."
-            },
-            {
-                "id": "task-B",
-                "agent_id": "agent-2",
-                "instructions": "Draft a summary based on the themes."
-            }
-        ],
-        "edges": [
-            {
-                "source": "START",
-                "target": "task-A"
-            },
-            {
-                "source": "task-A",
-                "target": "task-B"
-            },
-            {
-                "source": "task-B",
-                "target": "END"
-            }
-        ]
-    }
+    "s3_context_links": []
 }
