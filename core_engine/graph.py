@@ -3,7 +3,7 @@ from langgraph.graph import StateGraph, START, END
 from core_engine.state import AgentState
 from core_engine.nodes import create_node_function
 
-def execute_graph(
+async def execute_graph(
     graph_payload: Dict[str, Any],
     agents: List[Dict[str, Any]],
     resources: List[Dict[str, Any]],
@@ -84,7 +84,7 @@ def execute_graph(
     }
     
     print("Executing compiled LangGraph...")
-    result = app.invoke(initial_state, {"recursion_limit": 25})
+    result = await app.ainvoke(initial_state, {"recursion_limit": 25})
     
     # Join formatted per-node outputs for the final response
     return "\n".join(result["node_outputs"].values())

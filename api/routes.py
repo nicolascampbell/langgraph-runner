@@ -34,7 +34,7 @@ async def execute_run(request: RunRequest):
             context_data += "\n"
 
         # 4. Execute LangGraph multi-agent workflow
-        result = execute_graph(
+        result = await execute_graph(
             graph_payload={"nodes": payload["nodes"], "edges": payload["edges"]},
             agents=payload["agents"],
             resources=payload["resources"],

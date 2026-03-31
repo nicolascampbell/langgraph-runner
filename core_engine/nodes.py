@@ -1,36 +1,30 @@
 from datetime import datetime, timezone
 from typing import Dict, Any
 
+from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langgraph.prebuilt import create_react_agent
 
 from core_engine.state import AgentState
 from core_engine.llm import get_llm
 from core_engine.tools.registry import load_tools
+from core_engine.tools.mcp_client import mcp_tools_context
 
 
 def create_node_function(node_config: Dict[str, Any]):
     """
-    Creates a node function that will be attached to the LangGraph execution flow.
-    The node config comes from the JSONB 'nodes' payload from the DB.
+    Creates an async node function attached to the LangGraph execution flow.
+    Handles both regular tools (sync-loaded) and MCP tools (async subprocess).
     """
     node_id = node_config.get("id")
     agent_id = node_config.get("agent_id")
     task_instructions = node_config.get("instructions", "No instructions provided.")
     resource_ids = node_config.get("resource_ids")  # None means "all resources"
 
-    def process_node(state: AgentState):
-        """
-        Dynamically processes a node based on its configuration,
-        using the specific agent and the shared context.
-        """
+    async def process_node(state: AgentState):
         run_id = state.get("run_id", "")
 
-        # Look up the agent config that is supposed to run this node
         agent_config = state["agents"].get(agent_id, {})
         agent_name = agent_config.get("name", "Unknown Agent")
-
-        # Determine the model and provider
         model_provider = agent_config.get("model_provider", "openai")
         model_name = agent_config.get("model_name", "gpt-4o-mini")
         temperature = agent_config.get("temperature", 0.7)
@@ -38,51 +32,37 @@ def create_node_function(node_config: Dict[str, Any]):
 
         print(f"\n[{agent_name}] executing Node {node_id} using {model_provider} ({model_name})...")
 
-        # Dynamically instantiate the LLM
-        llm = get_llm(
-            provider=model_provider,
-            model_name=model_name,
-            temperature=temperature,
-        )
+        llm = get_llm(provider=model_provider, model_name=model_name, temperature=temperature)
 
-        # Construct the messages array, including prior node outputs as conversation history
         messages = (
             [SystemMessage(content=system_prompt)]
             + state.get("messages", [])
             + [HumanMessage(content=f"Context Document:\n{state['context']}\n\nTask: {task_instructions}")]
         )
 
-        # Load tools for this node only — filtered by resource_ids if specified
+        # Split resources into MCP (async subprocess) and regular (sync-loaded)
         resources_dict = state.get("resources", {})
         if resource_ids is not None:
             resources_list = [resources_dict[rid] for rid in resource_ids if rid in resources_dict]
         else:
             resources_list = list(resources_dict.values())
-        tools = load_tools(resources_list)
+
+        mcp_resources = [r for r in resources_list if r.get("type") == "mcp"]
+        sync_resources = [r for r in resources_list if r.get("type") != "mcp"]
+        sync_tools = load_tools(sync_resources)
 
         started_at = datetime.now(timezone.utc)
         token_usage = None
 
         try:
-            # Determine execution path
-            if tools:
-                print(f" -> Equipping {len(tools)} tool(s). Starting ReAct Agent loop...")
-                agent_executor = create_react_agent(llm, tools=tools)
-                response = agent_executor.invoke({"messages": messages}, {"recursion_limit": 10})
-                result_content = response["messages"][-1].content
-                # Best-effort token usage from last AI message
-                last_msg = response["messages"][-1]
-                if hasattr(last_msg, "usage_metadata") and last_msg.usage_metadata:
-                    token_usage = last_msg.usage_metadata
+            if mcp_resources:
+                async with mcp_tools_context(mcp_resources) as mcp_tool_list:
+                    all_tools = sync_tools + mcp_tool_list
+                    result_content, token_usage = await _invoke_agent(llm, messages, all_tools)
             else:
-                print(" -> No tools equipped. Using direct LLM invocation...")
-                response = llm.invoke(messages)
-                result_content = response.content
-                if hasattr(response, "usage_metadata") and response.usage_metadata:
-                    token_usage = response.usage_metadata
+                result_content, token_usage = await _invoke_agent(llm, messages, sync_tools)
 
         except Exception as e:
-            finished_at = datetime.now(timezone.utc)
             _safe_write_log(run_id, node_id, "error", str(e))
             raise
 
@@ -93,10 +73,7 @@ def create_node_function(node_config: Dict[str, Any]):
             f"{result_content}\n"
         )
 
-        # Persist node output to DB (best-effort — don't fail the run on DB errors)
-        _safe_write_node_execution(
-            run_id, node_id, formatted_response, started_at, finished_at, token_usage
-        )
+        _safe_write_node_execution(run_id, node_id, formatted_response, started_at, finished_at, token_usage)
 
         new_outputs = state.get("node_outputs", {}).copy()
         new_outputs[node_id] = formatted_response
@@ -107,6 +84,22 @@ def create_node_function(node_config: Dict[str, Any]):
         }
 
     return process_node
+
+
+async def _invoke_agent(llm, messages, tools):
+    """Run the LLM — with a ReAct agent loop if tools are present, directly otherwise."""
+    if tools:
+        print(f" -> Equipping {len(tools)} tool(s). Starting ReAct Agent loop...")
+        agent = create_agent(llm, tools)
+        response = await agent.ainvoke({"messages": messages}, {"recursion_limit": 10})
+        last_msg = response["messages"][-1]
+        token_usage = getattr(last_msg, "usage_metadata", None)
+        return last_msg.content, token_usage
+    else:
+        print(" -> No tools equipped. Using direct LLM invocation...")
+        response = await llm.ainvoke(messages)
+        token_usage = getattr(response, "usage_metadata", None)
+        return response.content, token_usage
 
 
 def _safe_write_node_execution(run_id, node_id, output, started_at, finished_at, token_usage):

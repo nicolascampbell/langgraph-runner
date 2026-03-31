@@ -33,6 +33,9 @@ def load_tools(resources: List[Dict[str, Any]]) -> List[BaseTool]:
             active_tools.extend(search_tools)
             print(f" - Loaded {len(search_tools)} web search tool(s).")
 
+        elif res_type == "mcp":
+            print(f" - MCP resource '{res_name}' will be handled asynchronously in node execution.")
+
         else:
             print(f" - Resource type '{res_type}' is not supported yet.")
 

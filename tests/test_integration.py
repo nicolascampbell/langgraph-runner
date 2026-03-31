@@ -1,6 +1,6 @@
 """
 Integration test script for workmate-runner.
-Tests DB connectivity, graph execution, web search, and DB persistence.
+Tests DB connectivity, graph execution, web search, node persistence, and QB MCP.
 
 Usage:
     venv/Scripts/python tests/test_integration.py
@@ -9,6 +9,8 @@ import os
 import sys
 import json
 import uuid
+import asyncio
+from dotenv import dotenv_values
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -20,7 +22,6 @@ from services.db_service import (
     fetch_graph_payload,
     create_run_record,
     update_run_status,
-    write_node_execution,
     write_run_log,
 )
 from core_engine.graph import execute_graph
@@ -30,9 +31,16 @@ MISSION_ID     = "00000000-0000-0000-0000-000000000099"
 AGENT_1        = "00000000-0000-0000-0001-000000000001"
 AGENT_2        = "00000000-0000-0000-0001-000000000002"
 WEB_SEARCH_RES = "00000000-0000-0000-0002-000000000001"
+QB_MCP_RES     = "00000000-0000-0000-0002-000000000002"
+
+QB_MCP_PATH = r"F:\Nico\Work\Vincent\mcp servers\quickbooks\quickbooks-online-mcp-server\dist\index.js"
+QB_MCP_ENV = json.dumps(dict(dotenv_values(
+    r"F:\Nico\Work\Vincent\mcp servers\quickbooks\quickbooks-online-mcp-server\.env"
+)))
 
 PASS = "\033[92m[PASS]\033[0m"
 FAIL = "\033[91m[FAIL]\033[0m"
+SKIP = "\033[93m[SKIP]\033[0m"
 
 
 def section(title):
@@ -89,14 +97,20 @@ try:
             "INSERT INTO resources (id, mission_id, type, name, description) VALUES (%s,%s,%s,%s,%s)",
             (WEB_SEARCH_RES, MISSION_ID, "web_search", "Web Search", "DuckDuckGo search"),
         )
+        cur.execute(
+            "INSERT INTO resources (id, mission_id, type, name, description, connection_string, auth_token) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            (QB_MCP_RES, MISSION_ID, "mcp", "QuickBooks",
+             "QuickBooks Online sandbox via MCP", f"node {QB_MCP_PATH}", QB_MCP_ENV),
+        )
         conn.commit()
-    print(f"{PASS} Mission, 2 agents, and web_search resource inserted")
+    print(f"{PASS} Mission, 2 agents, web_search + QB MCP resources inserted")
 except Exception as e:
     print(f"{FAIL} {e}")
     sys.exit(1)
 
 
-# ── 3. fetch_graph_payload with a 2-node graph ───────────────────────────────
+# ── 3. fetch_graph_payload ────────────────────────────────────────────────────
 section("3. fetch_graph_payload")
 TWO_NODE_GRAPH = {
     "nodes": [
@@ -123,9 +137,9 @@ try:
     payload = fetch_graph_payload(MISSION_ID)
     assert len(payload["nodes"]) == 2, "Expected 2 nodes"
     assert len(payload["agents"]) == 2, "Expected 2 agents"
-    assert len(payload["resources"]) == 1, "Expected 1 resource"
+    assert len(payload["resources"]) == 2, "Expected 2 resources"
     print(f"{PASS} Fetched: {len(payload['nodes'])} nodes, "
-          f"{len(payload['agents'])} agents, {len(payload['resources'])} resource")
+          f"{len(payload['agents'])} agents, {len(payload['resources'])} resources")
 except Exception as e:
     print(f"{FAIL} {e}")
     sys.exit(1)
@@ -136,13 +150,13 @@ section("4. Two-node graph execution (no tools)")
 run_id_basic = str(uuid.uuid4())
 try:
     create_run_record(run_id_basic, MISSION_ID, payload["graph_version"])
-    result = execute_graph(
+    result = asyncio.run(execute_graph(
         graph_payload={"nodes": TWO_NODE_GRAPH["nodes"], "edges": TWO_NODE_GRAPH["edges"]},
         agents=payload["agents"],
-        resources=[],          # no tools for this test
+        resources=[],
         context_data="",
         run_id=run_id_basic,
-    )
+    ))
     update_run_status(run_id_basic, "completed", result[:500])
     assert "task-research" in result and "task-summary" in result
     print(f"{PASS} Graph executed, {len(result)} chars of output")
@@ -152,7 +166,7 @@ except Exception as e:
     print(f"{FAIL} {e}")
 
 
-# ── 5. Verify node_executions persisted ─────────────────────────────────────
+# ── 5. Verify node_executions persisted ──────────────────────────────────────
 section("5. node_executions persistence")
 try:
     with get_db_connection() as conn:
@@ -191,13 +205,13 @@ WEB_SEARCH_EDGES = [
 ]
 try:
     create_run_record(run_id_search, MISSION_ID, payload["graph_version"])
-    result_search = execute_graph(
+    result_search = asyncio.run(execute_graph(
         graph_payload={"nodes": WEB_SEARCH_NODES, "edges": WEB_SEARCH_EDGES},
         agents=payload["agents"],
         resources=payload["resources"],
         context_data="",
         run_id=run_id_search,
-    )
+    ))
     update_run_status(run_id_search, "completed", result_search[:500])
     print(f"{PASS} Web search agent completed")
     print()
@@ -206,8 +220,42 @@ except Exception as e:
     print(f"{FAIL} {e}")
 
 
-# ── 7. run_logs write ─────────────────────────────────────────────────────────
-section("7. run_logs write")
+# ── 7. QuickBooks MCP tool ────────────────────────────────────────────────────
+section("7. QuickBooks MCP tool")
+run_id_qb = str(uuid.uuid4())
+QB_NODES = [
+    {
+        "id": "task-qb",
+        "agent_id": AGENT_1,
+        "resource_ids": [QB_MCP_RES],
+        "instructions": "List the first 3 customers in QuickBooks. Return their names and balances.",
+    }
+]
+QB_EDGES = [
+    {"source": "START",    "target": "task-qb"},
+    {"source": "task-qb",  "target": "END"},
+]
+qb_resources = [r for r in payload["resources"] if r["type"] == "mcp"]
+try:
+    create_run_record(run_id_qb, MISSION_ID, payload["graph_version"])
+    result_qb = asyncio.run(execute_graph(
+        graph_payload={"nodes": QB_NODES, "edges": QB_EDGES},
+        agents=payload["agents"],
+        resources=qb_resources,
+        context_data="",
+        run_id=run_id_qb,
+    ))
+    update_run_status(run_id_qb, "completed", result_qb[:500])
+    assert "task-qb" in result_qb
+    print(f"{PASS} QB MCP agent completed")
+    print()
+    print(result_qb[:800])
+except Exception as e:
+    print(f"{FAIL} {e}")
+
+
+# ── 8. run_logs write ─────────────────────────────────────────────────────────
+section("8. run_logs write")
 try:
     write_run_log(run_id_basic, "task-research", "info", "Integration test log entry")
     with get_db_connection() as conn:
